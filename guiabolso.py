@@ -74,7 +74,7 @@ def GetStatement():
             item.update({'categoryId': transaction['categoryId']})
             item.update({'categoryName': categories[transaction['categoryId']]})
             item.update({'value': transaction['value']})
-            item.update({'date': transaction['date']})
+            item.update({'date': (time.strftime('%d/%m/%Y', time.gmtime(transaction['date'] / 1000)))})
             item.update({'currency': transaction['currency']})
             item.update({'exchangeValue': transaction['exchangeValue']})
             item.update({'duplicated': transaction['duplicated']})
