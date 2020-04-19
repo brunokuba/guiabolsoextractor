@@ -3,6 +3,9 @@ Python scraper using selenium-wire to get Statement data from Guia Bolso and exp
 
 Requires:
 - [selenium-wire](https://pypi.org/project/selenium-wire/)
+- [chromedriver] (https://chromedriver.chromium.org/)
+
+Tested with Chromedriver
 
 Usage:
 ```
