@@ -21,7 +21,7 @@ login = 'https://www.guiabolso.com.br/web/#/login'
 extrato = 'https://www.guiabolso.com.br/web/#/financas/extrato'
 
 
-# chromedriver_path = './chromedriver'
+#chromedriver_path = './chromedriver'
 browser = webdriver.Chrome(seleniumwire_options=options)
 browser.scopes = ['.*guiabolso.*']
 
@@ -125,5 +125,7 @@ time.sleep(5)
 browser.get(extrato)
 # Completion of execution closes proxy and prevents further connections. Sleeping to allow for requests to be captured
 time.sleep(5)
-export_statement = MonthSelector()
+all_transactions = MonthSelector()
+tuple_transactions = set(tuple(transaction.items()) for transaction in all_transactions)
+export_statement = [dict(transaction) for transaction in tuple_transactions]
 write_output(export_data=export_statement, file_name=output_file_name)
