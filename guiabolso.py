@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 import json
 from seleniumwire import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -12,7 +13,6 @@ along with respective categories to CSV
 
 TO DO
 - Needs to figure out a way to wait for DOM to be fully loaded to retrived request data
-- TO DO: MonthSelector loops through months in the future, stop loop on current month
 '''
 
 # https://github.com/wkeeling/selenium-wire/issues/55
@@ -36,14 +36,15 @@ pwd = args.password
 output_file_name = args.output_file_name
 
 
-def GetStatement():
+def parseRequest():
     '''
     Flters and parses statement requests, generating a dict of categories and list of dicts with each transaction
     Uses global browser objects
     '''
     api_requests = [request for request in browser.requests if 'comparador/v2' in str(request)]
-    monthly_statements = []
+    statements = []
     category_types = []
+    firstTransaction = ''
     for request in api_requests:
         # body is returned as Bytes, so need to decode to str and from Str to Dict
         req_body = json.loads(request.body.decode('UTF-8'))
@@ -51,17 +52,27 @@ def GetStatement():
             resp_body = json.loads(request.response.body.decode('UTF-8'))
             try:
                 if (resp_body.get('payload', {}).get('userMonthHistory', {}).get('statements') != None):
-                    monthly_statements += resp_body['payload']['userMonthHistory']['statements']
+                    statements += resp_body['payload']['userMonthHistory']['statements']
                 if (resp_body.get('payload', {}).get('rawData', {}).get('categoryTypes') != None):
                     category_types = resp_body.get('payload', {}).get('rawData', {}).get('categoryTypes')
+                if (resp_body.get('payload', {}).get('rawData', {}).get('firstTransaction') != None):
+                    firstTransaction = resp_body.get('payload', {}).get('rawData', {}).get('firstTransaction')
             except AttributeError:
                 continue
 
+    firstTransaction = time.strptime(firstTransaction, '%d/%m/%Y')
     categories = {}
     for category_type in category_types:
         for category in category_type['categories']:
             categories.update({category['id']: category['name']})
 
+    return statements, categories, firstTransaction
+
+
+def GetStatement(monthly_statements, categories):
+    '''
+    Extracts transactions and respective category, returns merged list from all accounts
+    '''
     merged_monthly_statement = []
     for statement in monthly_statements:
         for transaction in statement['transactions']:
@@ -87,6 +98,7 @@ def MonthSelector():
     '''
     Loops through each month available at the statement screen
     Menu rendered dynamically an only shows after clicking on central menu
+    call request parser, statement parser and returns final list of transactins
     '''
     browser.find_element_by_class_name('center').click()
     menu = browser.find_element_by_id('month-select-menu')
@@ -98,7 +110,9 @@ def MonthSelector():
         months = i_menu.find_elements_by_tag_name('li')
         months[i].click()
         time.sleep(5)
-        final_statement += GetStatement()
+        month_statement, transaction_categories, firstTransaction = parseRequest()
+        final_statement += GetStatement(month_statement, transaction_categories)
+        del browser.requests
         browser.find_element_by_class_name('center').click()
         i += 1
     return final_statement
