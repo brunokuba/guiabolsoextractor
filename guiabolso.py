@@ -19,6 +19,7 @@ TO DO
 options = {'verify_ssl': False, 'suppress_connection_errors': False, 'disable_encoding': True}
 login = 'https://www.guiabolso.com.br/web/#/login'
 extrato = 'https://www.guiabolso.com.br/web/#/financas/extrato'
+home = 'https://app.guiabolso.com.br/#/financas/resumo'
 
 
 #chromedriver_path = './chromedriver'
@@ -41,7 +42,8 @@ def parseRequest():
     Flters and parses statement requests, generating a dict of categories and list of dicts with each transaction
     Uses global browser objects
     '''
-    api_requests = [request for request in browser.requests if 'comparador/v2' in str(request)]
+    #api_requests = [request for request in browser.requests if 'comparador/v2' in str(request)]
+    api_requests = [request for request in browser.requests if 'v2/events' in str(request)]
     statements = []
     category_types = []
     firstTransaction = ''
@@ -84,7 +86,7 @@ def GetStatement(monthly_statements, categories):
             item.update({'label': transaction['label']})
             item.update({'categoryId': transaction['categoryId']})
             item.update({'categoryName': categories[transaction['categoryId']]})
-            item.update({'value': transaction['value']})
+            item.update({'value': round(float(transaction['value']), 2)})
             item.update({'date': (time.strftime('%d/%m/%Y', time.gmtime(transaction['date'] / 1000)))})
             item.update({'currency': transaction['currency']})
             item.update({'exchangeValue': transaction['exchangeValue']})
@@ -100,20 +102,25 @@ def MonthSelector():
     Menu rendered dynamically an only shows after clicking on central menu
     call request parser, statement parser and returns final list of transactins
     '''
-    browser.find_element_by_class_name('center').click()
-    menu = browser.find_element_by_id('month-select-menu')
+    menu = browser.find_element_by_class_name('MonthSelectMenuRoot')
+    menu.find_element_by_tag_name('button').click()
     qty_months = len(menu.find_elements_by_tag_name('li'))
+    # close menu before starting the loop
+    browser.find_element_by_id('root').click()
     final_statement = []
     i = 0
     while (i < qty_months):
-        i_menu = browser.find_element_by_id('month-select-menu')
-        months = i_menu.find_elements_by_tag_name('li')
-        months[i].click()
+        menu = browser.find_element_by_class_name('MonthSelectMenuRoot')
+        menu.find_element_by_tag_name('button').send_keys(Keys.ENTER)
+        months = menu.find_elements_by_tag_name('li')
+        months[i].send_keys(Keys.ENTER)
+        browser.get(extrato)
         time.sleep(5)
         month_statement, transaction_categories, firstTransaction = parseRequest()
         final_statement += GetStatement(month_statement, transaction_categories)
         del browser.requests
-        browser.find_element_by_class_name('center').click()
+        browser.get(home)
+        time.sleep(5)
         i += 1
     return final_statement
 
@@ -134,9 +141,10 @@ browser.get(login)
 time.sleep(5)
 browser.find_element_by_name("email").send_keys(username)
 browser.find_element_by_name("password").send_keys(pwd + Keys.ENTER)
+# Need to manually pass ReCaptcha
+breakpoint()
 
 time.sleep(5)
-browser.get(extrato)
 # Completion of execution closes proxy and prevents further connections. Sleeping to allow for requests to be captured
 time.sleep(5)
 all_transactions = MonthSelector()
