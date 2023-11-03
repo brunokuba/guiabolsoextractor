@@ -4,50 +4,26 @@ import json
 from seleniumwire import webdriver
 from selenium.webdriver.common.keys import Keys
 import argparse
+import configparser
 import csv
 
 '''
-Uses selenium-wire (https://pypi.org/project/selenium-wire/) to
-acess all statements from Guiabolso and output transactions
-along with respective categories to CSV
-
-TO DO
-- Needs to figure out a way to wait for DOM to be fully loaded to retrived request data
+Scraper using selenium-wire (https://pypi.org/project/selenium-wire/) to
+acess all bank statements from Guiabolso and output transactions
+along with respective categories to CSV file
 '''
-
-# https://github.com/wkeeling/selenium-wire/issues/55
-options = {'verify_ssl': False, 'suppress_connection_errors': False, 'disable_encoding': True}
-login = 'https://www.guiabolso.com.br/web/#/login'
-extrato = 'https://www.guiabolso.com.br/web/#/financas/extrato'
-home = 'https://app.guiabolso.com.br/#/financas/resumo'
-
-
-#chromedriver_path = './chromedriver'
-browser = webdriver.Chrome(seleniumwire_options=options)
-browser.scopes = ['.*guiabolso.*']
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-username")
-parser.add_argument("-password")
-parser.add_argument("-output_file_name")
-args = parser.parse_args()
-username = args.username
-pwd = args.password
-output_file_name = args.output_file_name
-
 
 def parseRequest():
     '''
     Flters and parses statement requests, generating a dict of categories and list of dicts with each transaction
     Uses global browser objects
     '''
-    #api_requests = [request for request in browser.requests if 'comparador/v2' in str(request)]
     api_requests = [request for request in browser.requests if 'v2/events' in str(request)]
     statements = []
     category_types = []
     firstTransaction = ''
     for request in api_requests:
+        
         # body is returned as Bytes, so need to decode to str and from Str to Dict
         req_body = json.loads(request.body.decode('UTF-8'))
         if (req_body['name'] == 'users:summary:month'):
@@ -105,6 +81,7 @@ def MonthSelector():
     menu = browser.find_element_by_class_name('MonthSelectMenuRoot')
     menu.find_element_by_tag_name('button').click()
     qty_months = len(menu.find_elements_by_tag_name('li'))
+    
     # close menu before starting the loop
     browser.find_element_by_id('root').click()
     final_statement = []
@@ -137,17 +114,42 @@ def write_output(export_data, file_name):
             print('no statement to write')
 
 
-browser.get(login)
-time.sleep(5)
-browser.find_element_by_name("email").send_keys(username)
-browser.find_element_by_name("password").send_keys(pwd + Keys.ENTER)
-# Need to manually pass ReCaptcha
-breakpoint()
+if __name__ == '__main__':
+    # Selenium wire cannot handle self-signed SSL certificates, skipping the check. 
+    # Ref https://github.com/wkeeling/selenium-wire/issues/55
+    options = {'verify_ssl': False, 'suppress_connection_errors': False, 'disable_encoding': True}
 
-time.sleep(5)
-# Completion of execution closes proxy and prevents further connections. Sleeping to allow for requests to be captured
-time.sleep(5)
-all_transactions = MonthSelector()
-tuple_transactions = set(tuple(transaction.items()) for transaction in all_transactions)
-export_statement = [dict(transaction) for transaction in tuple_transactions]
-write_output(export_data=export_statement, file_name=output_file_name)
+    config = configparser.RawConfigParser()
+    config.read('urls.cfg')
+    urls = dict(config.items('URLs'))
+    login = urls['login']
+    extrato = urls['extrato']
+    home = urls['home']
+    
+    browser = webdriver.Chrome(seleniumwire_options=options)
+    browser.scopes = ['.*guiabolso.*']
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-username")
+    parser.add_argument("-password")
+    parser.add_argument("-output_file_name")
+    args = parser.parse_args()
+    username = args.username
+    pwd = args.password
+    output_file_name = args.output_file_name
+
+    browser.get(login)
+    time.sleep(5)
+    browser.find_element_by_name("email").send_keys(username)
+    browser.find_element_by_name("password").send_keys(pwd + Keys.ENTER)
+    
+    # Need to manually pass ReCaptcha
+    breakpoint()
+    time.sleep(5)
+    
+    # Completion of execution closes proxy and prevents further connections. Sleeping to allow for requests to be captured
+    time.sleep(5)
+    all_transactions = MonthSelector()
+    tuple_transactions = set(tuple(transaction.items()) for transaction in all_transactions)
+    export_statement = [dict(transaction) for transaction in tuple_transactions]
+    write_output(export_data=export_statement, file_name=output_file_name)
